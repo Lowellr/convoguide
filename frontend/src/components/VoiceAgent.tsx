@@ -31,12 +31,16 @@ function AgentRoom({ onDisconnect }: { onDisconnect?: () => void }) {
   // Listen for mode updates from the agent via data channel
   useDataChannel("mode-update", (msg) => {
     try {
-      const data = JSON.parse(new TextDecoder().decode(msg.payload));
+      const decoded = new TextDecoder().decode(msg.payload);
+      console.log("Raw mode update received:", decoded);
+      const data = JSON.parse(decoded);
+      console.log("Parsed mode data:", data);
       if (data.mode) {
+        console.log("Setting mode to:", data.mode);
         setCurrentMode(data.mode);
       }
-    } catch {
-      // Ignore parse errors
+    } catch (e) {
+      console.error("Error parsing mode update:", e);
     }
   });
 

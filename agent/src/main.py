@@ -123,9 +123,13 @@ async def entrypoint(ctx: JobContext):
     mode_tracker = ModeTracker(ctx.room)
 
     # Create the agent session with STT, LLM, TTS, and VAD
+    # Updated to encourage more tool usage for mode switching
     session = AgentSession(
         stt=deepgram.STT(),
-        llm=openai.LLM(model="gpt-4o-mini"),
+        llm=openai.LLM(
+            model="gpt-4o-mini",
+            temperature=0.7,
+        ),
         tts=cartesia.TTS(),
         vad=silero.VAD.load(),
     )
@@ -134,15 +138,19 @@ async def entrypoint(ctx: JobContext):
     agent = ConvoGuideAgent()
 
     # Set up event handlers for session state tracking
-    @session.on("user_input")
-    def on_user_input(text: str):
-        """Track user mood and mode from their input."""
-        # Detect mode shift
+    @session.on("user_input_transcribed")
+    def on_user_input_transcribed_for_mode(event):
+        """Track user mood and mode from their input and update UI."""
+        text = event.transcript
+        logger.info(f"Checking for mode in text: '{text}'")
+
+        # Detect mode shift from user intent
         detected_mode = infer_mode_from_text(text)
+        logger.info(f"Detected mode: {detected_mode}")
         if detected_mode:
             session_state.update_mode(detected_mode)
             logger.info(f"Mode shifted to: {detected_mode.value}")
-            # Send mode update asynchronously
+            # Send mode update immediately based on user intent
             asyncio.create_task(mode_tracker.send_mode_update(detected_mode.value))
 
         # Detect mood
@@ -151,9 +159,7 @@ async def entrypoint(ctx: JobContext):
             session_state.log_mood(detected_mood)
             logger.info(f"Mood detected: {detected_mood}")
 
-    @session.on("user_input_transcribed")
-    def on_user_input_transcribed(event):
-        """Send user transcriptions to chat."""
+        # Also send user transcription to chat
         logger.info(f"USER INPUT TRANSCRIBED: {event.transcript}")
         asyncio.create_task(mode_tracker.publish_to_chat(event.transcript))
 
